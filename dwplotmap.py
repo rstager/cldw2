@@ -54,11 +54,9 @@ def on_message(client, userdata, msg):
         plt.plot(v.x[-1:],v.y[-1:],marker='o',markersize=10,label=id,gid=v.t)
     for id,v in aseries.items():
         plt.plot(v.x,v.y,marker='+',markersize=30,label=id)
-        #plt.scatter(v.x, v.y, marker='o', s=(v.tprop)*100, facecolors='none', edgecolors='r')
     ax = plt.gca()
     for id, v in aseries.items():
         if v.tprop == 0 : continue
-        print(id,v.tprop,v.x,v.y)
         circle1 = plt.Circle((v.x,v.y), v.tprop*0.9835, color='r',fc='none',alpha=0.2)
         ax.add_artist(circle1)
     plt.legend(loc='lower left', shadow=True)
