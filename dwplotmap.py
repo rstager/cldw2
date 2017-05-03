@@ -48,12 +48,13 @@ def on_message(client, userdata, msg):
         return
 
     plt.clf()
-    plt.axis([0,40,0,28])
+    plt.axis([-5,45,-5,35])
     for id,v in series.items():
         plt.plot(v.x[-100:],v.y[-100:])
         plt.plot(v.x[-1:],v.y[-1:],marker='o',markersize=10,label=id,gid=v.t)
     for id,v in aseries.items():
         plt.plot(v.x,v.y,marker='+',markersize=30,label=id)
+        plt.annotate(id, xy = (v.x,v.y))
     ax = plt.gca()
     for id, v in aseries.items():
         if v.tprop == 0 : continue
