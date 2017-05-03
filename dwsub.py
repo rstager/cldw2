@@ -9,6 +9,8 @@ from numpy import mean, std
 
 import json
 
+t0=time.time()
+
 def distance(a, b):
     return math.sqrt(math.pow(a.x - b.x, 2) + math.pow(a.y - b.y, 2))
 
@@ -58,12 +60,16 @@ class Range:
         self.Treply2 = 0
         self.Tround2 = 0
         self.Tprop = 0
+        self.delta = 0
         self.history = []
         self.raw1=0
+        self.timestamp=0
 
     def record(self, t):
+        self.delta=abs(self.Tprop-t)
         self.Tprop = t
         self.history.append(t)
+        self.timestamp=time.time()
         if len(self.history) > 10: self.history.pop(0)
 
     def mean(self):
@@ -136,7 +142,7 @@ def on_message(client, userdata, msg):
 client = paho.Client()
 client.on_subscribe = on_subscribe
 client.on_message = on_message
-client.tls_set("/usr/local/etc/mosquitto/server.crt", certfile="client.crt", keyfile="client-nopass.key")
+client.tls_set("server.crt", certfile="client.crt", keyfile="client-nopass.key")
 # client.tls_set("/usr/local/etc/mosquitto/server.crt",certfile="client.crt",keyfile="client.key",tls_version=ssl.PROTOCOL_TLSv1)
 client.tls_insecure_set(True)
 client.connect("192.168.1.69", 8883)
@@ -209,7 +215,7 @@ def tagResidual(vars,tag,atprops):
     x=vars[0]
     y=vars[1]
     resid=[]
-    for pong, t in atprops:
+    for pong, t,d in atprops:
         resid.append( (t) - (FT_TO_NS(distance4(x, y, pong.x, pong.y)) + 510 + globaldr)) # ydata-f(x,params)
     return resid
 
@@ -218,11 +224,15 @@ def locateTag(tagid):
     atprops=[]
     v=[0,0]
     for a in anchorTable.values():
+        tp=tprop[tagid,a.id]
+        valid=(tp.timestamp-time.time()<1.5)
+        delta=tp.delta
         t=tprop[tagid,a.id].Tprop
-        if t>0:
-            atprops.append((a,t))
+        if t>0 and valid and delta<3:
+            atprops.append((a,t,delta))
     if len(atprops)<2: return (0,0)
-    answer = leastsq(tagResidual, v, (tagid,atprops),full_output=True,ftol=0.1)
+    satprops=sorted(atprops, key=lambda tp: tp[1]) 
+    answer = leastsq(tagResidual, v, (tagid,satprops[:4]),full_output=True,ftol=0.1)
     return (answer[0][0],answer[0][1]),atprops
 
 
@@ -266,33 +276,44 @@ def periodic():
                 print()
             print()
             print("tag tprop")
-            print("       ", end='')
+            print("            ", end='')
             for addr in anchorids:
                 print("  {:05d} ".format(addr), end='')
             print()
+            for a in anchorTable.values():
+                jstr = json.dumps({'id':a.id,'type':'anchor','x':a.x,'y':a.y})
+                client.publish("/tagat", payload=jstr, qos=1)
         headingcnt = 0
     else:
         headingcnt += 1
 
+    timestamp=time.time()-t0
     for ping in tagids:
-        print("  {:05d} ".format(ping), end='')
+        print("{:5.0f}  {:05d} ".format(timestamp,ping), end='')
         for pong in anchorids:
             tp=tprop[(ping, pong)]
-            print("{:6.1f}  ".format(tp.Tprop),end='')
+            print("{:6.1f}{} ".format(tp.Tprop,("*" if (time.time()-tp.timestamp)>1.1 else " ")),end='')
         loc,atprops=locateTag(ping)
-        jstr = json.dumps({'id':ping,'x':loc[0],'y':loc[1]})
+        jstr = json.dumps({'id':ping,'type':'tag','x':loc[0],'y':loc[1],'t':timestamp})
         client.publish("/tagat", payload=jstr, qos=1)
         print("{:6.1f}  {:6.1f}  ".format(loc[0],loc[1]), end='')
         print()
 
-    timer = threading.Timer(1, periodic)
+    timer = threading.Timer(1.2, periodic)
     timer.daemon = True
     timer.start()
-#anchorTable[49951].loc(0,0)
-anchorTable[59303].loc(0,0)
-anchorTable[59770].loc(6,7)
-anchorTable[52962].loc(0,7)
-#anchorTable[39336].loc(4.5,5)
+anchorTable[49951].loc(18,3.5)
+anchorTable[59303].loc(36,1)
+anchorTable[59770].loc(20.5,28)
+anchorTable[52962].loc(34,27) 
+anchorTable[39336].loc(0,12)
+anchorTable[61368].loc(18,11)
+anchorTable[65022].loc(7,25)
+#anchorTable[49951].loc(20,3.5)
+#anchorTable[59303].loc(2,1)
+#anchorTable[59770].loc(15.5,28)
+#anchorTable[52962].loc(2,27) 
+#anchorTable[39336].loc(37.5,12)
 #anchorTable[59303].loc(3.5,5)
 periodic()
 
