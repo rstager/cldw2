@@ -53,13 +53,17 @@ tagTable = factorydict(lambda id: Tag(id))
 
 class Range:
     def __init__(self, id):
-        (self.anchor, self.tag) = id
+        (self.pong, self.ping) = id
         self.M1sequence = -1
         self.Treply1 = 0
         self.Tround1 = 0
         self.Treply2 = 0
         self.Tround2 = 0
         self.Tprop = 0
+        self.q1 = 0
+        self.q2 = 0
+        self.q3 = 0
+        self.q4 = 0
         self.delta = 0
         self.history = []
         self.raw1=0
@@ -93,47 +97,45 @@ histogram=[0]*100
 def on_message(client, userdata, msg):
     if (len(msg.payload) < 14):
         return
-    # print(binascii.hexlify(msg.payload))
+    #print(binascii.hexlify(msg.payload))
 
     (report_addr, count) = unpack_from("<HH", msg.payload);
-    # print(msg.topic+" "+str(msg.qos)+" ",len(msg.payload)," addr=",report_addr," count= ",count)
+    #print(msg.topic+" "+str(msg.qos)+" ",len(msg.payload)," addr=",report_addr," count= ",count)
     offset = 4
     for idx in range(count):
         if len(msg.payload) < offset + 16:
             continue
-        (Treply, Tround, pong_addr, ping_addr, M1sequence, flags) = unpack_from("<IIHHBB", msg.payload, offset=offset);
-        #print("report={:05d} ping={:05d} pong={:05d} seq={:3d} flags={:2x} Treply={:10d} Tround={:10d}".format(report_addr, ping_addr, pong_addr, M1sequence, flags, Treply, Tround))
-        offset += 16
-        if (Treply == 0 and Tround == 0):
+        (Treply1, Tround1, Treply2, Tround2, pong_addr, ping_addr, rx_fqual1, rx_fqual2,rx_fqual3,rx_fqual4, M1sequence, flags) = unpack_from("<IIIIHHHHHHBB", msg.payload, offset=offset);
+        #print("report={:05d} ping={:05d} pong={:05d} seq={:3d} flags={:2x} Treply={:10d} Tround={:10d}  Treply={:10d} Tround={:10d} q1={:6d} q2={:6d} q3={:6d} q4={:6d} ".format(report_addr, ping_addr, pong_addr, M1sequence, flags, Treply1, Tround1, Treply2, Tround2, rx_fqual1, rx_fqual2,rx_fqual3,rx_fqual4))
+        offset += 32
+        if (Treply1 == 0 and Tround1 == 0):
             pass
-        if (flags == 3):
+        if (flags == 0):
             leg = tprop[(ping_addr, pong_addr)]
-            leg.Treply1 = Treply
-            leg.Tround1 = Tround
-            leg.M1sequence = M1sequence
-            leg.part1 = True
-        elif (flags == 4):
-            leg = tprop[(ping_addr, pong_addr)]
-            leg.Treply2 = Treply
-            leg.Tround2 = Tround
-            if (leg.M1sequence == M1sequence):
-                leg.record(TIMEUNITS_TO_NS(leg.Tround1 - leg.Treply2 + leg.Tround2 - leg.Treply1) / 4.0)
-                leg.raw2=leg.raw1
-                leg.raw1=leg.Tround1 - leg.Treply2 + leg.Tround2 - leg.Treply1
-                if(leg.raw1!=0 and leg.raw2!=0 and pong_addr==39336):
-                    diff=abs(leg.raw1-leg.raw2)
-                    #print("{:6.1f} {:012x} {:012x} diff={:012x} round={:012x} {:012x} reply={:012x} {:012x} prop={:012x} {:012x}".format(leg.Tprop, leg.raw1, leg.raw2, diff,
-                    # #                                                                                                                    leg.Tround1 , leg.Tround2,
-                    #                                                                                                                     leg.Treply1,leg.Treply2,leg.Tround1-leg.Treply2,leg.Tround2-leg.Treply1))
-                 #   if (diff>>4)<100:
-                #        histogram[diff>>4]+=1
+            leg.Treply1 = Treply1
+            leg.Tround1 = Tround1
+            leg.Treply2 = Treply2
+            leg.Tround2 = Tround2
+            leg.M1sequence == M1sequence
+            leg.record(TIMEUNITS_TO_NS(leg.Tround1 - leg.Treply2 + leg.Tround2 - leg.Treply1) / 4.0)
+            leg.q1=rx_fqual1
+            leg.q2=rx_fqual2
+            leg.q3=rx_fqual3
+            leg.q4=rx_fqual4
+            #print("ping:{:5d} pong:{:5d} Tprop:{:6.2f}".format(leg.ping,leg.pong,leg.Tprop))
+            #leg.raw2=leg.raw1
+            #leg.raw1=leg.Tround1 - leg.Treply2 + leg.Tround2 - leg.Treply1
+            #if(leg.raw1!=0 and leg.raw2!=0 and pong_addr==39336):
+                #diff=abs(leg.raw1-leg.raw2)
+                #print("{:6.1f} {:012x} {:012x} diff={:012x} round={:012x} {:012x} reply={:012x} {:012x} prop={:012x} {:012x}".format(leg.Tprop, leg.raw1, leg.raw2, diff,
+                # #                                                                                                                    leg.Tround1 , leg.Tround2,
+                #                                                                                                                     leg.Treply1,leg.Treply2,leg.Tround1-leg.Treply2,leg.Tround2-leg.Treply1))
+             #   if (diff>>4)<100:
+            #        histogram[diff>>4]+=1
 
-                if leg.Tprop < 300:
-                    print("anchor={:05d} tag={:05d} tprop={:6.1f}".format(leg.anchor, leg.tag, leg.Tprop))
-                    print(leg.Treply1, leg.Tround1, leg.Treply2, leg.Tround2, leg.M1sequence, M1sequence)
-            else:
-                leg.Tprop = 0;
-                leg.M1sequence = -1
+            if leg.Tprop < 300:
+                print("anchor={:05d} tag={:05d} tprop={:6.1f}".format(leg.anchor, leg.tag, leg.Tprop))
+                print(leg.Treply1, leg.Tround1, leg.Treply2, leg.Tround2, leg.M1sequence, M1sequence)
 
 
 '''
@@ -211,12 +213,12 @@ def generateAnchorLocations():
             anchorTable[a.id].y=v.pop(0)
     print("answers=", answer[3], answer[4], globaldr)
 
-def tagResidual(vars,tag,atprops):
+def tagResidual(vars,tag,atprops,dr):
     x=vars[0]
     y=vars[1]
     resid=[]
     for pong, t,d in atprops:
-        resid.append( (t) - (FT_TO_NS(distance4(x, y, pong.x, pong.y)) + 510 + globaldr)) # ydata-f(x,params)
+        resid.append( (t) - (FT_TO_NS(distance4(x, y, pong.x, pong.y)) + 510 + dr)) # ydata-f(x,params)
     return resid
 
 
@@ -230,13 +232,14 @@ def locateTag(tagid):
         t=tprop[tagid,a.id].Tprop
         if t>0 and valid and delta<3:
             atprops.append((a,t,delta))
-    if len(atprops)<2: return (0,0)
-    satprops=sorted(atprops, key=lambda tp: tp[1]) 
-    answer = leastsq(tagResidual, v, (tagid,satprops[:4]),full_output=True,ftol=0.1)
-    return (answer[0][0],answer[0][1]),atprops
+    if len(atprops)<2: return (0,0),[]
+    satprops=sorted(atprops, key=lambda tp: tp[1])
+    solntprops=satprops[:4]
+    answer = leastsq(tagResidual, v, (tagid,solntprops,globaldr),full_output=True,ftol=0.1)
+    return (answer[0][0],answer[0][1]),solntprops
 
 
-headingcnt = 110
+headingcnt = 8
 
 
 def periodic():
@@ -249,7 +252,7 @@ def periodic():
             generateAnchorLocations()
         if len(anchorids) > 0:
             print()
-            print("anchor tprop")
+            print("anchor tprop dr=",globaldr)
             print("       ", end='')
             for addr in anchorids:
                 print("  {:05d} ".format(addr), end='')
@@ -276,9 +279,9 @@ def periodic():
                 print()
             print()
             print("tag tprop")
-            print("            ", end='')
+            print("             ", end='')
             for addr in anchorids:
-                print("  {:05d} ".format(addr), end='')
+                print("  {:05d}       ".format(addr), end='')
             print()
             for a in anchorTable.values():
                 jstr = json.dumps({'id':a.id,'type':'anchor','x':a.x,'y':a.y})
@@ -289,12 +292,14 @@ def periodic():
 
     timestamp=time.time()-t0
     for ping in tagids:
-        print("{:5.0f}  {:05d} ".format(timestamp,ping), end='')
+        print("{:5.0f}  {:05d}  ".format(timestamp,ping), end='')
         for pong in anchorids:
             tp=tprop[(ping, pong)]
-            print("{:6.1f}{} ".format(tp.Tprop,("*" if (time.time()-tp.timestamp)>1.1 else " ")),end='')
+            print("{:6.1f}{} {:5d} ".format(tp.Tprop,("*" if (time.time()-tp.timestamp)>1.1 else " "),tp.q1),end='')
         loc,atprops=locateTag(ping)
-        jstr = json.dumps({'id':ping,'type':'tag','x':loc[0],'y':loc[1],'t':timestamp})
+
+        jtprops=[(a.id,t-510-globaldr) for (a,t,d) in atprops]
+        jstr = json.dumps({'id':ping,'type':'tag','x':loc[0],'y':loc[1],'t':timestamp,'tprops':jtprops})
         client.publish("/tagat", payload=jstr, qos=1)
         print("{:6.1f}  {:6.1f}  ".format(loc[0],loc[1]), end='')
         print()
@@ -310,7 +315,7 @@ anchorTable[39336].loc(0,12)
 anchorTable[61368].loc(18,11)
 anchorTable[65022].loc(7,25)
 #anchorTable[49951].loc(20,3.5)
-#anchorTable[59303].loc(2,1)
+#anchorTable[59303].loc(2,1)/
 #anchorTable[59770].loc(15.5,28)
 #anchorTable[52962].loc(2,27) 
 #anchorTable[39336].loc(37.5,12)
