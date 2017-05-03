@@ -225,16 +225,18 @@ def tagResidual(vars,tag,atprops,dr):
 def locateTag(tagid):
     atprops=[]
     v=[0,0]
+    tnow=time.time()
     for a in anchorTable.values():
         tp=tprop[tagid,a.id]
-        valid=(tp.timestamp-time.time()<1.5)
+        valid=(tp.timestamp-tnow<1.5)
         delta=tp.delta
         t=tprop[tagid,a.id].Tprop
-        if t>0 and valid and delta<3:
+        #print (a.id,valid,delta,t,tp.timestamp,tnow)
+        if tp.timestamp>0 and t>0 and valid and delta<3:
             atprops.append((a,t,delta))
     if len(atprops)<2: return (0,0),[]
     satprops=sorted(atprops, key=lambda tp: tp[1])
-    solntprops=satprops[:4]
+    solntprops=satprops[:]
     answer = leastsq(tagResidual, v, (tagid,solntprops,globaldr),full_output=True,ftol=0.1)
     return (answer[0][0],answer[0][1]),solntprops
 
@@ -279,9 +281,9 @@ def periodic():
                 print()
             print()
             print("tag tprop")
-            print("             ", end='')
+            print("               ", end='')
             for addr in anchorids:
-                print("  {:05d}       ".format(addr), end='')
+                print("  {:05d}                           ".format(addr), end='')
             print()
             for a in anchorTable.values():
                 jstr = json.dumps({'id':a.id,'type':'anchor','x':a.x,'y':a.y})
@@ -292,11 +294,16 @@ def periodic():
 
     timestamp=time.time()-t0
     for ping in tagids:
-        print("{:5.0f}  {:05d}  ".format(timestamp,ping), end='')
+        print("{:5.0f}  {:05d}    ".format(timestamp,ping), end='')
+        loc,atprops=locateTag(ping)
         for pong in anchorids:
             tp=tprop[(ping, pong)]
-            print("{:6.1f}{} {:5d} ".format(tp.Tprop,("*" if (time.time()-tp.timestamp)>1.1 else " "),tp.q1),end='')
-        loc,atprops=locateTag(ping)
+            significant=False
+            for (a,t,d) in atprops:
+                if (a.id==pong):
+                    significant=True
+                    break
+            print("{:6.1f}{} {:5d} {:5d} {:5d} {:5d} : ".format(tp.Tprop,("*" if significant else " "),tp.q1,tp.q2,tp.q3,tp.q4),end='')
 
         jtprops=[(a.id,t-510-globaldr) for (a,t,d) in atprops]
         jstr = json.dumps({'id':ping,'type':'tag','x':loc[0],'y':loc[1],'t':timestamp,'tprops':jtprops})
